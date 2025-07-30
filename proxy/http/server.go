@@ -118,13 +118,28 @@ Start:
 		return trace
 	}
 
-	if len(s.config.Accounts) > 0 {
+	if len(s.config.Accounts) > 0 || s.config.AuthType == AuthType_KEYAUTH {
 		user, pass, ok := parseBasicAuth(request.Header.Get("Proxy-Authorization"))
-		if !ok || !s.config.HasAccount(user, pass) {
-			return common.Error2(conn.Write([]byte("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"proxy\"\r\n\r\n")))
+
+		authPassed := false
+		if s.config.AuthType == AuthType_KEYAUTH {
+			if ok && s.config.ValidateKey(pass) {
+				authPassed = true
+				if inbound != nil {
+					inbound.User.Email = user
+				}
+			}
+		} else { // 默认使用PASSWORD认证
+			if ok && s.config.HasAccount(user, pass) {
+				authPassed = true
+				if inbound != nil {
+					inbound.User.Email = user
+				}
+			}
 		}
-		if inbound != nil {
-			inbound.User.Email = user
+
+		if !authPassed {
+			return common.Error2(conn.Write([]byte("HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"proxy\"\r\n\r\n")))
 		}
 	}
 
