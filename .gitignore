@@ -44,3 +44,4 @@ errorgen
 # Certificates
 *.crt
 *.key
+build.bat
