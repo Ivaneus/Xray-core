@@ -47,7 +47,7 @@ type ServerSession struct {
 }
 
 func (s *ServerSession) handshake4(cmd byte, reader io.Reader, writer io.Writer) (*protocol.RequestHeader, error) {
-	if s.config.AuthType == AuthType_PASSWORD {
+	if s.config.AuthType == AuthType_PASSWORD || s.config.AuthType == AuthType_KEYAUTH {
 		writeSocks4Response(writer, socks4RequestRejected, net.AnyIP, net.Port(0))
 		return nil, errors.New("socks 4 is not allowed when auth is required.")
 	}
