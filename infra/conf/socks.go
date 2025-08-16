@@ -25,7 +25,6 @@ func (v *SocksAccount) Build() *socks.Account {
 const (
 	AuthMethodNoAuth   = "noauth"
 	AuthMethodUserPass = "password"
-	AuthMethodKeyAuth  = "keyauth"
 )
 
 type SocksServerConfig struct {
@@ -34,7 +33,6 @@ type SocksServerConfig struct {
 	UDP        bool            `json:"udp"`
 	Host       *Address        `json:"ip"`
 	UserLevel  uint32          `json:"userLevel"`
-	Keys       []string        `json:"keys"`
 }
 
 func (v *SocksServerConfig) Build() (proto.Message, error) {
@@ -44,15 +42,6 @@ func (v *SocksServerConfig) Build() (proto.Message, error) {
 		config.AuthType = socks.AuthType_NO_AUTH
 	case AuthMethodUserPass:
 		config.AuthType = socks.AuthType_PASSWORD
-	case AuthMethodKeyAuth:
-		config.AuthType = socks.AuthType_KEYAUTH
-		// 设置keys字段
-		if v.Keys != nil {
-			config.Keys = make(map[string]int32)
-			for _, key := range v.Keys {
-				config.Keys[key] = socks.ValidKey // 直接使用值1
-			}
-		}
 	default:
 		// errors.New("unknown socks auth method: ", v.AuthMethod, ". Default to noauth.").AtWarning().WriteToLog()
 		config.AuthType = socks.AuthType_NO_AUTH

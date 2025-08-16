@@ -22,45 +22,16 @@ func (v *HTTPAccount) Build() *http.Account {
 	}
 }
 
-const (
-	HTTPAuthMethodNoAuth         = "noauth"
-	HTTPAuthMethodUserPass       = "password"
-	HTTPAuthMethodKeyAuth        = "keyauth"
-	ValidKey               int32 = 1 // 添加新的认证方法常量
-)
-
 type HTTPServerConfig struct {
 	Accounts    []*HTTPAccount `json:"accounts"`
 	Transparent bool           `json:"allowTransparent"`
 	UserLevel   uint32         `json:"userLevel"`
-	AuthMethod  string         `json:"auth"` // 添加认证方法字段
-	Keys        []string       `json:"keys"` // 添加keys字段
 }
 
 func (c *HTTPServerConfig) Build() (proto.Message, error) {
 	config := &http.ServerConfig{
 		AllowTransparent: c.Transparent,
 		UserLevel:        c.UserLevel,
-	}
-
-	// 设置认证类型
-	switch c.AuthMethod {
-	case HTTPAuthMethodNoAuth:
-		config.AuthType = http.AuthType_NO_AUTH
-	case HTTPAuthMethodUserPass:
-		config.AuthType = http.AuthType_PASSWORD
-	case HTTPAuthMethodKeyAuth:
-		config.AuthType = http.AuthType_KEYAUTH
-		// 设置keys字段
-		if c.Keys != nil {
-			config.Keys = make(map[string]int32)
-			for _, key := range c.Keys {
-				config.Keys[key] = http.ValidKey // 直接使用值1
-			}
-		}
-	default:
-		// 默认不认证
-		config.AuthType = http.AuthType_NO_AUTH
 	}
 
 	if len(c.Accounts) > 0 {

@@ -44,27 +44,10 @@ func NewServer(ctx context.Context, config *ServerConfig) (*Server, error) {
 	httpConfig := &http.ServerConfig{
 		UserLevel: config.UserLevel,
 	}
-
-	// 设置对应的认证类型
-	switch config.AuthType {
-	case AuthType_NO_AUTH:
-		httpConfig.AuthType = http.AuthType_NO_AUTH
-	case AuthType_PASSWORD:
-		httpConfig.AuthType = http.AuthType_PASSWORD
-	case AuthType_KEYAUTH:
-		httpConfig.AuthType = http.AuthType_KEYAUTH
-	default:
-		httpConfig.AuthType = http.AuthType_NO_AUTH
-	}
-
 	if config.AuthType == AuthType_PASSWORD {
 		httpConfig.Accounts = config.Accounts
-		s.udpFilter = new(UDPFilter)
-	} else if config.AuthType == AuthType_KEYAUTH {
-		httpConfig.Keys = config.Keys
-		s.udpFilter = new(UDPFilter)
+		s.udpFilter = new(UDPFilter) // We only use this when auth is enabled
 	}
-
 	s.httpServer, _ = http.NewServer(ctx, httpConfig)
 	return s, nil
 }
