@@ -47,7 +47,7 @@ type ServerSession struct {
 }
 
 func (s *ServerSession) handshake4(cmd byte, reader io.Reader, writer io.Writer) (*protocol.RequestHeader, error) {
-	if s.config.AuthType == AuthType_PASSWORD {
+	if s.config.AuthType == AuthType_PASSWORD || s.config.AuthType == AuthType_KEYAUTH {
 		writeSocks4Response(writer, socks4RequestRejected, net.AnyIP, net.Port(0))
 		return nil, errors.New("socks 4 is not allowed when auth is required.")
 	}
@@ -106,6 +106,8 @@ func (s *ServerSession) auth5(nMethod byte, reader io.Reader, writer io.Writer) 
 	var expectedAuth byte = authNotRequired
 	if s.config.AuthType == AuthType_PASSWORD {
 		expectedAuth = authPassword
+	} else if s.config.AuthType == AuthType_KEYAUTH {
+		expectedAuth = authPassword // KEYAUTH uses the same protocol byte as PASSWORD
 	}
 
 	if !hasAuthMethod(expectedAuth, buffer.BytesRange(0, int32(nMethod))) {
@@ -123,9 +125,18 @@ func (s *ServerSession) auth5(nMethod byte, reader io.Reader, writer io.Writer) 
 			return "", errors.New("failed to read username and password for authentication").Base(err)
 		}
 
-		if !s.config.HasAccount(username, password) {
-			writeSocks5AuthenticationResponse(writer, 0x01, 0xFF)
-			return "", errors.New("invalid username or password")
+		if s.config.AuthType == AuthType_PASSWORD {
+			if !s.config.HasAccount(username, password) {
+				writeSocks5AuthenticationResponse(writer, 0x01, 0xFF)
+				return "", errors.New("invalid username or password")
+			}
+		} else if s.config.AuthType == AuthType_KEYAUTH {
+			if !s.config.ValidateKey(password) {
+				writeSocks5AuthenticationResponse(writer, 0x01, 0xFF)
+				return "", errors.New("invalid key")
+			}
+			// 明确返回用户名
+			// 认证成功时返回用户名
 		}
 
 		if err := writeSocks5AuthenticationResponse(writer, 0x01, 0x00); err != nil {
