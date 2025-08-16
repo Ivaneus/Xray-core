@@ -13,11 +13,25 @@ message Account {
   string password = 2;
 }
 
+// AuthType for HTTP proxy
+enum AuthType {
+  // NO_AUTH for no authentication
+  NO_AUTH = 0;
+  // PASSWORD for username/password authentication
+  PASSWORD = 1;
+  // KEYAUTH for key-based authentication
+  KEYAUTH = 2;
+}
+
 // Config for HTTP proxy server.
 message ServerConfig {
   map<string, string> accounts = 2;
   bool allow_transparent = 3;
   uint32 user_level = 4;
+  // Authentication type
+  AuthType auth_type = 5;
+  // Key map for KEYAUTH
+  map<string, int32> keys = 6;
 }
 
 message Header {
