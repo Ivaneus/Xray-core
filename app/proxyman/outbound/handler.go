@@ -12,6 +12,8 @@ import (
 
 	"github.com/xtls/xray-core/common/dice"
 
+	"github.com/xtls/xray-core/common/dice"
+
 	"github.com/xtls/xray-core/app/proxyman"
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/buf"
