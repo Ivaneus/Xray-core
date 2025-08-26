@@ -11,9 +11,6 @@ import (
 	"strings"
 
 	"github.com/xtls/xray-core/common/dice"
-
-	"github.com/xtls/xray-core/common/dice"
-
 	"github.com/xtls/xray-core/app/proxyman"
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/buf"
@@ -328,6 +325,7 @@ func (h *Handler) SetOutboundGateway(ctx context.Context, ob *session.Outbound) 
 
 		case domain == "origin":
 			if inbound := session.InboundFromContext(ctx); inbound != nil {
+<<<<<<< HEAD
 				// 使用一条LogDebug语句打印整个inbound对象
 				errors.LogDebug(ctx, "Via origin mode - Inbound session: ", inbound)
 				errors.LogDebug(ctx, "Via origin mode - Inbound Email: ", inbound.User.Email)
@@ -374,6 +372,12 @@ func (h *Handler) SetOutboundGateway(ctx context.Context, ob *session.Outbound) 
 				}
 			} else {
 				errors.LogDebug(ctx, "Via origin mode - No inbound session found in context")
+=======
+				if inbound.Local.IsValid() && inbound.Local.Address.Family().IsIP() {
+					ob.Gateway = inbound.Local.Address
+					errors.LogDebug(ctx, "use inbound local ip as sendthrough: ", inbound.Local.Address.String())
+				}
+>>>>>>> b65da7726769adc5be9b2121c6fc7cdae85222ae
 			}
 		case domain == "srcip":
 			if inbound := session.InboundFromContext(ctx); inbound != nil {
