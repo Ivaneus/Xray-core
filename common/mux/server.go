@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 
+	"github.com/xtls/xray-core/app/dispatcher"
 	"github.com/xtls/xray-core/common"
 	"github.com/xtls/xray-core/common/buf"
 	"github.com/xtls/xray-core/common/errors"
@@ -61,6 +62,7 @@ func (s *Server) DispatchLink(ctx context.Context, dest net.Destination, link *t
 	if dest.Address != muxCoolAddress {
 		return s.dispatcher.DispatchLink(ctx, dest, link)
 	}
+	link = s.dispatcher.(*dispatcher.DefaultDispatcher).WrapLink(ctx, link)
 	_, err := NewServerWorker(ctx, s.dispatcher, link)
 	return err
 }
@@ -87,7 +89,14 @@ func NewServerWorker(ctx context.Context, d routing.Dispatcher, link *transport.
 		link:           link,
 		sessionManager: NewSessionManager(),
 	}
-	go worker.run(ctx)
+	if inbound := session.InboundFromContext(ctx); inbound != nil {
+		inbound.CanSpliceCopy = 3
+	}
+	if _, ok := link.Reader.(*pipe.Reader); ok {
+		go worker.run(ctx)
+	} else {
+		worker.run(ctx)
+	}
 	return worker, nil
 }
 
@@ -311,8 +320,8 @@ func (w *ServerWorker) run(ctx context.Context) {
 	reader := &buf.BufferedReader{Reader: w.link.Reader}
 
 	defer w.sessionManager.Close()
-	defer common.Close(w.link.Writer)
 	defer common.Interrupt(w.link.Reader)
+	defer common.Interrupt(w.link.Writer)
 
 	for {
 		select {

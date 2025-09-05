@@ -26,7 +26,6 @@ import (
 	"github.com/xtls/xray-core/transport"
 	"github.com/xtls/xray-core/transport/internet"
 	"github.com/xtls/xray-core/transport/internet/stat"
-	"github.com/xtls/xray-core/transport/internet/tls"
 )
 
 var useSplice bool
@@ -73,7 +72,7 @@ func isValidAddress(addr *net.IPOrDomain) bool {
 	}
 
 	a := addr.AsAddress()
-	return a != net.AnyIP
+	return a != net.AnyIP && a != net.AnyIPv6
 }
 
 // Process implements proxy.Outbound.
@@ -212,16 +211,14 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 
 	responseDone := func() error {
 		defer timer.SetTimeout(plcy.Timeouts.UplinkOnly)
-		if destination.Network == net.Network_TCP {
+		if destination.Network == net.Network_TCP && useSplice && proxy.IsRAWTransportWithoutSecurity(conn) { // it would be tls conn in special use case of MITM, we need to let link handle traffic
 			var writeConn net.Conn
 			var inTimer *signal.ActivityTimer
-			if inbound := session.InboundFromContext(ctx); inbound != nil && inbound.Conn != nil && useSplice {
+			if inbound := session.InboundFromContext(ctx); inbound != nil && inbound.Conn != nil {
 				writeConn = inbound.Conn
 				inTimer = inbound.Timer
 			}
-			if !isTLSConn(conn) { // it would be tls conn in special use case of MITM, we need to let link handle traffic
-				return proxy.CopyRawConnIfExist(ctx, conn, writeConn, link.Writer, timer, inTimer)
-			}
+			return proxy.CopyRawConnIfExist(ctx, conn, writeConn, link.Writer, timer, inTimer)
 		}
 		var reader buf.Reader
 		if destination.Network == net.Network_TCP {
@@ -244,22 +241,6 @@ func (h *Handler) Process(ctx context.Context, link *transport.Link, dialer inte
 	}
 
 	return nil
-}
-
-func isTLSConn(conn stat.Connection) bool {
-	if conn != nil {
-		statConn, ok := conn.(*stat.CounterConnection)
-		if ok {
-			conn = statConn.Connection
-		}
-		if _, ok := conn.(*tls.Conn); ok {
-			return true
-		}
-		if _, ok := conn.(*tls.UConn); ok {
-			return true
-		}
-	}
-	return false
 }
 
 func NewPacketReader(conn net.Conn, UDPOverride net.Destination, DialDest net.Destination) buf.Reader {
@@ -418,7 +399,7 @@ func (w *PacketWriter) WriteMultiBuffer(mb buf.MultiBuffer) error {
 					}
 				}
 			}
-			destAddr, _ := net.ResolveUDPAddr("udp", b.UDP.NetAddr())
+			destAddr := b.UDP.RawNetAddr()
 			if destAddr == nil {
 				b.Release()
 				continue

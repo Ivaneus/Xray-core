@@ -1,6 +1,7 @@
 package conf
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"path/filepath"
 	"runtime"
@@ -73,17 +74,67 @@ func (c *VLessInboundConfig) Build() (proto.Message, error) {
 		}
 
 		if account.Encryption != "" {
-			return nil, errors.New(`VLESS clients: "encryption" should not in inbound settings`)
+			return nil, errors.New(`VLESS clients: "encryption" should not be in inbound settings`)
 		}
 
 		user.Account = serial.ToTypedMessage(account)
 		config.Clients[idx] = user
 	}
 
-	if c.Decryption != "none" {
-		return nil, errors.New(`VLESS settings: please add/set "decryption":"none" to every settings`)
-	}
 	config.Decryption = c.Decryption
+	if !func() bool {
+		s := strings.Split(config.Decryption, ".")
+		if len(s) < 4 || s[0] != "mlkem768x25519plus" {
+			return false
+		}
+		switch s[1] {
+		case "native":
+		case "xorpub":
+			config.XorMode = 1
+		case "random":
+			config.XorMode = 2
+		default:
+			return false
+		}
+		t := strings.SplitN(strings.TrimSuffix(s[2], "s"), "-", 2)
+		i, err := strconv.Atoi(t[0])
+		if err != nil {
+			return false
+		}
+		config.SecondsFrom = int64(i)
+		if len(t) == 2 {
+			i, err := strconv.Atoi(t[1])
+			if err != nil {
+				return false
+			}
+			config.SecondsTo = int64(i)
+		}
+		padding := 0
+		for _, r := range s[3:] {
+			if len(r) < 20 {
+				padding += len(r) + 1
+				continue
+			}
+			if b, _ := base64.RawURLEncoding.DecodeString(r); len(b) != 32 && len(b) != 64 {
+				return false
+			}
+		}
+		config.Decryption = config.Decryption[27+len(s[2]):]
+		if padding > 0 {
+			config.Padding = config.Decryption[:padding-1]
+			config.Decryption = config.Decryption[padding:]
+		}
+		return true
+	}() && config.Decryption != "none" {
+		if config.Decryption == "" {
+			return nil, errors.New(`VLESS settings: please add/set "decryption":"none" to every settings`)
+		}
+		return nil, errors.New(`VLESS settings: unsupported "decryption": ` + config.Decryption)
+	}
+
+	if config.Decryption != "none" && c.Fallbacks != nil {
+		return nil, errors.New(`VLESS settings: "fallbacks" can not be used together with "decryption"`)
+	}
 
 	for _, fb := range c.Fallbacks {
 		var i uint16
@@ -155,16 +206,16 @@ type VLessOutboundConfig struct {
 func (c *VLessOutboundConfig) Build() (proto.Message, error) {
 	config := new(outbound.Config)
 
-	if len(c.Vnext) == 0 {
-		return nil, errors.New(`VLESS settings: "vnext" is empty`)
+	if len(c.Vnext) != 1 {
+		return nil, errors.New(`VLESS settings: "vnext" should have one and only one member`)
 	}
 	config.Vnext = make([]*protocol.ServerEndpoint, len(c.Vnext))
 	for idx, rec := range c.Vnext {
 		if rec.Address == nil {
 			return nil, errors.New(`VLESS vnext: "address" is not set`)
 		}
-		if len(rec.Users) == 0 {
-			return nil, errors.New(`VLESS vnext: "users" is empty`)
+		if len(rec.Users) != 1 {
+			return nil, errors.New(`VLESS vnext: "users" should have one and only one member`)
 		}
 		spec := &protocol.ServerEndpoint{
 			Address: rec.Address.Build(),
@@ -193,8 +244,48 @@ func (c *VLessOutboundConfig) Build() (proto.Message, error) {
 				return nil, errors.New(`VLESS users: "flow" doesn't support "` + account.Flow + `" in this version`)
 			}
 
-			if account.Encryption != "none" {
-				return nil, errors.New(`VLESS users: please add/set "encryption":"none" for every user`)
+			if !func() bool {
+				s := strings.Split(account.Encryption, ".")
+				if len(s) < 4 || s[0] != "mlkem768x25519plus" {
+					return false
+				}
+				switch s[1] {
+				case "native":
+				case "xorpub":
+					account.XorMode = 1
+				case "random":
+					account.XorMode = 2
+				default:
+					return false
+				}
+				switch s[2] {
+				case "1rtt":
+				case "0rtt":
+					account.Seconds = 1
+				default:
+					return false
+				}
+				padding := 0
+				for _, r := range s[3:] {
+					if len(r) < 20 {
+						padding += len(r) + 1
+						continue
+					}
+					if b, _ := base64.RawURLEncoding.DecodeString(r); len(b) != 32 && len(b) != 1184 {
+						return false
+					}
+				}
+				account.Encryption = account.Encryption[27+len(s[2]):]
+				if padding > 0 {
+					account.Padding = account.Encryption[:padding-1]
+					account.Encryption = account.Encryption[padding:]
+				}
+				return true
+			}() && account.Encryption != "none" {
+				if account.Encryption == "" {
+					return nil, errors.New(`VLESS users: please add/set "encryption":"none" for every user`)
+				}
+				return nil, errors.New(`VLESS users: unsupported "encryption": ` + account.Encryption)
 			}
 
 			user.Account = serial.ToTypedMessage(account)
